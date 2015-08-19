@@ -1,0 +1,119 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "David W. Body"
+date: "August 19, 2015"
+output: html_document
+---
+
+This is my course project for the Practical Machine Learning course from Coursera and the Johns Hopkins Bloomberg School of Public Health.
+
+This project uses Human Activity Recognition data from a study of weight lifting exercise.
+
+## Background
+
+Details and data are available at [groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
+
+Each of six participants performed one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions. In the first (A), each participant performed the curls correctly. In each of the others, the participants did the curls incorrectly: throwing the elbows (B), lifting the dumbbells only halfway (C), lowering the dumbbells only halfway (D), or throwing the hips (E).
+
+The participants were outfitted with sensors on their arms, forearms, and waists, and sensors were also attached to the dumbbells. The goal of this project is to see how well we can predict the manner in which the exercise was performed using the sensor data.
+
+For more information and an analysis of the data, see Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. **Qualitative Activity Recognition of Weight Lifting Exercises**. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+## Getting the Data
+
+We download the data from location specified in the project assignment. We also grab the test data for the second part of the project assignment.
+
+```{r, cache=TRUE}
+setwd("~/study/machine_learning/project")
+
+if (!file.exists("./data/pml-training.csv")) {
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                  destfile="./data/pml-training.csv", 
+                  method="libcurl")
+}
+
+if (!file.exists("./data/pml-testing.csv")) {
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                  destfile="./data/pml-testing.csv", 
+                  method="libcurl")
+}
+```
+
+## Cleaning the data
+
+We start by reading the data into a data frame and looking at it.
+
+```{r, cache=TRUE}
+har_data <- read.csv("./data/pml-training.csv")
+str(har_data)
+```
+
+There is a lot of data here!
+
+Several variables contain many NA or blank values. I decided to get rid of these variables.
+
+After some exploratory analysis and reading the Velloso, et al. article cited above, I decided to use variables whose names contained the strings "arm", "forearm", "belt", or "dumbbell".
+
+```{r, cache=TRUE}
+any_missing_or_blank <- sapply(har_data, function (x) any(is.na(x) | x == ""))
+vars_with_data <- names(har_data[, !any_missing_or_blank])
+predictors <- vars_with_data[grep("arm|forearm|belt|dumbbell", vars_with_data)]
+predictors
+```
+
+The outcome we want to predict is in the variable "classe", so we create a data frame containing "classe" and our predictors.
+
+```{r, cache=TRUE, warning=FALSE}
+library(dplyr)
+
+vars_to_include <- c("classe", predictors)
+
+selected_har_data <- select(har_data, one_of(vars_to_include))
+```
+
+## Training the Model
+
+We start by dividing our data in to training and testing sets. Because we have so much data, I chose to use 60% of the data for training and 40% for testing.
+
+```{r, cache=TRUE}
+library(caret)
+
+inTrain <- createDataPartition(y = selected_har_data$classe, p = 0.6, list = FALSE)
+training <- selected_har_data[inTrain, ]
+testing <- selected_har_data[-inTrain, ]
+
+dim(training)
+dim(testing)
+```
+
+To speed things up, we parallelize training the model across 6 CPU cores.
+
+```{r, cache=TRUE, warning=FALSE}
+library(doParallel)
+registerDoParallel(cores = 6)
+```
+
+We train a Random Forest model using 5-fold cross-validation and 200 trees in each forest.
+
+```{r, cache=TRUE, warning=FALSE}
+modFit <- train(classe ~ ., 
+                data = training, 
+                method = "rf", 
+                trControl = trainControl(number = 5), 
+                ntree = 200)
+```
+
+Examining our final model, we expect our out of sample error rate to be about 1%.
+
+```{r, cache=TRUE}
+modFit$finalModel
+```
+
+## Testing the Model
+
+We then check against the testing data that we set aside earlier and confirm that we do indeed achieve an accuracy of about 99%.
+
+```{r, cache=TRUE}
+predictions <- predict(modFit, newdata = testing)
+confusionMatrix(data = predictions, testing$classe)
+```
