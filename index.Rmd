@@ -1,11 +1,13 @@
 ---
-title: "Practical Machine Learning Course Project"
+title: "Course Project"
 author: "David W. Body"
-date: "August 19, 2015"
+date: "August 20, 2015"
 output: html_document
 ---
 
-This is my course project for the Practical Machine Learning course from Coursera and the Johns Hopkins Bloomberg School of Public Health.
+## Practical Machine Learning
+
+This is my course project for the [Practical Machine Learning](https://www.coursera.org/course/predmachlearn) course from Coursera and the Johns Hopkins Bloomberg School of Public Health.
 
 This project uses Human Activity Recognition data from a study of weight lifting exercise.
 
@@ -23,29 +25,32 @@ For more information and an analysis of the data, see Velloso, E.; Bulling, A.; 
 
 We download the data from location specified in the project assignment. We also grab the test data for the second part of the project assignment.
 
-```{r, cache=TRUE}
-setwd("~/study/machine_learning/project")
+```{r, echo=FALSE}
+setwd("~/study/practical_machine_learning/project")
+```
 
+```{r}
 if (!file.exists("./data/pml-training.csv")) {
-    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
-                  destfile="./data/pml-training.csv", 
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+                  destfile="./data/pml-training.csv",
                   method="libcurl")
 }
 
 if (!file.exists("./data/pml-testing.csv")) {
-    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
-                  destfile="./data/pml-testing.csv", 
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+                  destfile="./data/pml-testing.csv",
                   method="libcurl")
 }
 ```
 
-## Cleaning the data
+## Exploring and Cleaning the Data
 
 We start by reading the data into a data frame and looking at it.
 
-```{r, cache=TRUE}
+```{r}
 har_data <- read.csv("./data/pml-training.csv", stringsAsFactors = FALSE)
 str(har_data)
+dim(har_data)
 ```
 
 There is a lot of data here!
@@ -56,7 +61,7 @@ After some exploratory analysis and reading the Velloso, et al. article cited ab
 
 There is a time-series aspect to this data that might be important, and the data contains timestamp variables. However, I decided to see if we could produce a model capable of making accurate predictions ignoring the temporal aspect of the data. (I did this partly because we haven't covered time-series analysis in this course or any of the other courses leading up to in the Data Science Specialization.) As we'll see, it turns out that we can get a pretty accurate predictive model without any time-series analysis for this data.
 
-```{r, cache=TRUE}
+```{r}
 any_missing_or_blank <- sapply(har_data, function (x) any(is.na(x) | x == ""))
 vars_with_data <- names(har_data[, !any_missing_or_blank])
 predictors <- vars_with_data[grep("(fore)?arm|belt|dumbbell", vars_with_data)]
@@ -65,7 +70,7 @@ predictors
 
 The outcome we want to predict is in the variable "classe", so we create a data frame containing "classe" and our predictors.
 
-```{r, cache=TRUE, warning=FALSE, results='hide'}
+```{r, warning=FALSE, results='hide'}
 library(dplyr)
 
 vars_to_include <- c("classe", predictors)
@@ -76,7 +81,7 @@ selected_har_data$classe <- as.factor(selected_har_data$classe)
 
 ## Training the Model
 
-In order to make our results reproducible, we will choose an arbitrary seed for R's random number generator.
+In order to make our results reproducible, we set an arbitrary seed for R's random number generator.
 
 ```{r}
 set.seed(1337)
@@ -84,7 +89,7 @@ set.seed(1337)
 
 We start by dividing our data in to training and testing sets. Because we have so much data, we'll use 60% of the data for training and 40% for testing.
 
-```{r, cache=TRUE, results="hide"}
+```{r, results="hide"}
 library(caret)
 ```
 
@@ -99,57 +104,101 @@ dim(testing)
 
 To speed things up, we parallelize training the model across 6 CPU cores.
 
-```{r, cache=TRUE, warning=FALSE, results='hide'}
+```{r, warning=FALSE, results='hide'}
 library(doParallel)
 registerDoParallel(cores = 6)
 ```
 
 We train a Random Forest model using 10-fold cross-validation and 250 trees in each forest.
 
-```{r, cache=TRUE, warning=FALSE}
-modFit <- train(classe ~ ., 
-                data = training, 
-                method = "rf", 
-                trControl = trainControl(number = 10), 
+```{r, warning=FALSE, results='hide'}
+modFit <- train(classe ~ .,
+                data = training,
+                method = "rf",
+                trControl = trainControl(number = 10),
                 ntree = 250)
 ```
 
-Examining our final model, we expect our out-of-sample error rate to be about 1%.
+Let's take a look at the final model produced by the random forest training.
 
-```{r, cache=TRUE}
+```{r}
 modFit$finalModel
 ```
 
-## Testing the Model
+The out-of-bag estimate of the error rate from the 10-fold cross-validation during training is about 1%, which is quite good.
 
-We then check against the testing data that we set aside earlier and confirm that we do indeed achieve an accuracy of about 99%.
+## Out of Sample Error
 
-```{r, cache=TRUE}
+Now we want to see how well our model performs on data that wasn't used to generate the model. We do this by generating predictions of `classe` on the testing data that we set aside earlier and comparing these predictions to the actual `classe` values in the testing data.
+
+```{r}
 predictions <- predict(modFit, newdata = testing)
 confusionMatrix(data = predictions, testing$classe)
 ```
+
+The confusion matrix allows us to easily compute the accuracy of our model on the testing data.
+
+<p align="center" style="font-size: large">
+$accuracy = \frac{number\ correct}{number\ correct + number\ incorrect}$
+<p>
+
+Our estimated model accuracy is therefore the sum of the numbers on the diagonal of the confusion matrix (the correct predictions) divided by the sum of all the numbers in the matrix (the total number of predictions). This is reported as Accuracy in the Overall Statistics above, and is about 99%. A 95% confidence interval for our model's accuracy is also reported.
+
+Our out-of-sample error rate is simply
+
+<p align="center" style="font-size: large">
+$error\ rate = 1 - accuracy \approx 1\%$
+<p>
+
+These results confirm that we can have a high level of confidence that our out-of-sample error rate will be close to 1%.
 
 ## Model Analysis
 
 Using varImp, which we learned about on Quiz 3, we determine which variables are most important in our model.
 
-```{r, cache=TRUE}
+```{r}
 varImp(modFit)
 ```
 
-To gain some insights into our model, we can plot the top two variables against each other, and color the points based on our outcome variable.
+To gain some insights into our model, we can plot combinations of the top three variables against each other, and color the points based on our outcome variable.
 
-```{r, cache=TRUE}
+```{r}
 qplot(roll_belt, yaw_belt, color = classe, data = training)
+qplot(roll_belt, magnet_dumbbell_z, color = classe, data = training)
+qplot(yaw_belt, magnet_dumbbell_z, color = classe, data = training)
 ```
 
-The plot shows a pretty tight grouping of outcomes, but with some interesting patterns.
+These plots show some pretty tight groupings of observations, and a decent visible separation of the outcome values. Yet different outcomes are close enough together that additional variables beyond these three are likely to be important to the model's performance, as indicated by the output of varImp.
 
 We can also compare our predicted values with the actual values in our testing data.
 
-```{r, cache=TRUE}
-testing$predRight <- predictions == testing$classe
-qplot(roll_belt, yaw_belt, color=predRight, data=testing)
+```{r}
+testing$pred_correct <- predictions == testing$classe
+qplot(roll_belt, yaw_belt, color = pred_correct, data = testing)
+qplot(roll_belt, magnet_dumbbell_z, color = pred_correct, data = testing)
+qplot(yaw_belt, magnet_dumbbell_z, color = pred_correct, data = testing)
 ```
 
-This plot show which values our model predicted incorrectly in the testing data (predRight = FALSE). These seem about what we would expect based on the grouping of data in the previous plot.
+These plots show which values our model predicted incorrectly in the testing data (pred_correct = FALSE). These seem about what we would expect based on the grouping of data in the previous plots.
+
+### Prediction Submissions
+
+Not technically part of this report, but I need to generate predictions to be submitted for the second part of the project.
+
+```{r}
+# prediction assignment submission
+
+assignment_testing <- read.csv("./data/pml-testing.csv")
+assignment_predictions <- predict(modFit, newdata = assignment_testing)
+answers <- as.character(assignment_predictions)
+
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
