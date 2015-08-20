@@ -9,7 +9,9 @@ output: html_document
 
 This is my course project for the [Practical Machine Learning](https://www.coursera.org/course/predmachlearn) course from Coursera and the Johns Hopkins Bloomberg School of Public Health.
 
-This project uses Human Activity Recognition data from a study of weight lifting exercise.
+## Executive Summary
+
+This project analyzes Human Activity Recognition data from a study of weight lifting exercise to see if we can predict the manner in which participants performed a weight lifting exercise based on sensor data. Using a Random Forest model, we acheive a prediction accuracy of about 99%.
 
 ## Background
 
